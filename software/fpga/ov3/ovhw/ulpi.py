@@ -2,6 +2,7 @@ from migen import *
 from migen.fhdl import verilog
 #from migen.sim.generic import Simulator, TopLevel
 from migen.genlib.fsm import FSM, NextState
+from migen.genlib.misc import WaitTimer
 from migen.genlib.record import *
 from misoc.interconnect.stream import Endpoint
 
@@ -28,6 +29,16 @@ ULPI_REG = [
 	("rreq", 1, DIR_M_TO_S),
 	("rack", 1, DIR_S_TO_M)
 ]
+
+# The timeout value is taken from UTMI+ Low Pin Interface Specification,
+# Revision 1.1 Table 10 – Link decision times. It might be too high for
+# use in passive hardware sniffer but the error is on the wait-too-long
+# rather than wait-too-little.
+ULPI_LS_LINK_DECISION_TIMEOUT = 718
+
+
+def pid_compare(first_byte, pid):
+    return first_byte == (pid | ((~pid & 0xF) << 4))
 
 
 class ULPI_pl(Module):
@@ -60,7 +71,7 @@ class ULPI_pl(Module):
 
 
 class ULPI_ctrl(Module):
-	def __init__(self, ulpi_bus, ulpi_reg):
+	def __init__(self, ulpi_bus, ulpi_reg, handle_fs_pre):
 
 		ulpi_data_out = Signal(8)
 		ulpi_data_tristate = Signal()
@@ -73,6 +84,21 @@ class ULPI_ctrl(Module):
 		reg_write_data = Signal(8)
 
 		xcvr_select = Signal(2, reset=1)
+
+		# Packet tracking needed for Full-Speed PRE handling
+		fs_pre_en = Signal()
+		internal_reg_write = Signal()
+		first_byte_received = Signal()
+		first_byte = Signal(8)
+		switch_to_low_speed = Signal()
+		switch_to_full_speed = Signal()
+		ls_packet_on_fs_link = Signal()
+		wait_for_ls_response = Signal()
+		ls_response_timeout = ClockDomainsRenamer("ulpi")(
+			WaitTimer(ULPI_LS_LINK_DECISION_TIMEOUT))
+		self.comb += ls_response_timeout.wait.eq(wait_for_ls_response)
+		self.submodules += ls_response_timeout
+		self.sync.ulpi += fs_pre_en.eq(handle_fs_pre & xcvr_select[0])
 
 		ulpi_state_rx = Signal()
 		ulpi_state_rrd = Signal()
@@ -148,21 +174,44 @@ class ULPI_ctrl(Module):
 			ulpi_data_next.eq(0x00), # NOOP
 			ulpi_data_tristate_next.eq(0),
 			ulpi_stp_next.eq(0),
-			If(~ulpi_bus.dir & ~ulpi_bus.nxt & ~(RegWriteReq | RegReadReq), 
+			If(~ulpi_bus.dir & ~ulpi_bus.nxt & ~(switch_to_low_speed | switch_to_full_speed | ls_response_timeout.done | RegWriteReq | RegReadReq),
 				NextState("IDLE")
 			).Elif(ulpi_bus.dir, # TA, and then either RXCMD or Data
 				NextState("RX"),
+				NextValue(first_byte_received, 0),
 				ulpi_data_tristate_next.eq(1),
 				# If dir & nxt, we're starting a packet, so stuff a custom SOP
 				If(ulpi_bus.nxt,
 					ulpi_rx_stuff.eq(1),
 					ulpi_rx_stuff_d.eq(RXCMD_MAGIC_SOP)
 				)
+			).Elif(~fs_pre_en & (switch_to_low_speed | switch_to_full_speed | ls_packet_on_fs_link),
+				# User disabled automatic FS PRE handling. Do not switch to FS
+				# even if we are currently automatically switched to LS to avoid
+				# potential conflicts over configured speed.
+				NextValue(switch_to_low_speed, 0),
+				NextValue(switch_to_full_speed, 0),
+				NextValue(ls_packet_on_fs_link, 0),
+			).Elif(fs_pre_en & switch_to_low_speed,
+				NextState("RW0"),
+				ulpi_data_next.eq(0x84), # REGW FUNC_CTL
+				NextValue(reg_write_addr, 0x84),
+				NextValue(reg_write_data, 0x6b), # FS-for-LS, reset transceiver
+				NextValue(internal_reg_write, 1),
+				ulpi_data_tristate_next.eq(0),
+			).Elif(fs_pre_en & (switch_to_full_speed | ls_response_timeout.done),
+				NextState("RW0"),
+				ulpi_data_next.eq(0x84), # REGW FUNC_CTL
+				NextValue(reg_write_addr, 0x84),
+				NextValue(reg_write_data, 0x69), # FS, reset transceiver
+				NextValue(internal_reg_write, 1),
+				ulpi_data_tristate_next.eq(0),
 			).Elif(RegWriteReq,
 				NextState("RW0"),
 				ulpi_data_next.eq(0x80 | ulpi_reg.waddr), # REGW
 				NextValue(reg_write_addr, 0x80 | ulpi_reg.waddr),
 				NextValue(reg_write_data, ulpi_reg.wdata),
+				NextValue(internal_reg_write, 0),
 				ulpi_data_tristate_next.eq(0),
 				ulpi_stp_next.eq(0)
 			).Elif(RegReadReq,
@@ -178,12 +227,47 @@ class ULPI_ctrl(Module):
 			If(ulpi_bus.dir, # stay in RX
 				NextState("RX"),
 				ulpi_state_rx.eq(1),
-				ulpi_data_tristate_next.eq(1)
+				ulpi_data_tristate_next.eq(1),
+				If(ulpi_bus.nxt & ~first_byte_received,
+					NextValue(first_byte_received, 1),
+					NextValue(first_byte, ulpi_bus.di),
+					If(fs_pre_en & pid_compare(ulpi_bus.di, PID_PRE_ERR),
+						# Request stop on PRE packet ID
+						ulpi_stp_next.eq(1),
+						NextValue(switch_to_low_speed, 1),
+						NextValue(wait_for_ls_response, 0),
+					)
+				)
 			).Else( # TA back to idle
 				# Stuff an EOP on return to idle
 				ulpi_rx_stuff.eq(1),
 				ulpi_rx_stuff_d.eq(RXCMD_MAGIC_EOP),
-				ulpi_data_tristate_next.eq(0), 
+				ulpi_data_tristate_next.eq(0),
+				If(fs_pre_en & ls_packet_on_fs_link & first_byte_received,
+					If(wait_for_ls_response,
+						# We have just received response from device. Switch
+						# to full speed because host always sends PRE before
+						# next low speed packet
+						NextValue(switch_to_full_speed, 1),
+						NextValue(wait_for_ls_response, 0),
+					).Elif(pid_compare(first_byte, PID_DATA0) |
+					       pid_compare(first_byte, PID_IN) |
+					       pid_compare(first_byte, PID_DATA1),
+						# Host expects handshake from device. Note that there
+						# are no isochronous transfers at low speed so there
+						# always is handshake expected after DATA0/DATA1.
+						# If data is from device, host will send handshake with
+						# its own PRE (wait_for_ls_response will be set though
+						# so this elif branch won't be taken then).
+						# LPM SubPID is indirectly handled here because it
+						# shares PID with DATA0 and EXT PID is always sent with
+						# its own PRE.
+						NextValue(wait_for_ls_response, 1),
+					).Else(
+						# Host either sent handshake or will send next packet
+						NextValue(switch_to_full_speed, 1),
+					)
+				),
 				NextState("IDLE")
 			))
 	
@@ -228,7 +312,15 @@ class ULPI_ctrl(Module):
 				).Elif(reg_write_addr == 0x86,
 					NextValue(xcvr_select, xcvr_select & ~reg_write_data[0:2])
 				),
-				RegWriteAckSet.eq(1)
+				If(internal_reg_write,
+					NextValue(internal_reg_write, 0),
+					NextValue(ls_packet_on_fs_link, switch_to_low_speed),
+					NextValue(switch_to_low_speed, 0),
+					NextValue(switch_to_full_speed, 0),
+					NextValue(wait_for_ls_response, 0),
+				).Else(
+					RegWriteAckSet.eq(1),
+				)
 			).Elif(ulpi_bus.dir,
 				NextState("RX"),
 				ulpi_data_tristate_next.eq(1),

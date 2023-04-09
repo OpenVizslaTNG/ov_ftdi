@@ -69,6 +69,9 @@ class OV3(Module):
         # Diagnostics/Testing signals
         ulpi_cd_rst = Signal()
         ulpi_stp_ovr = Signal(1)
+
+        # Automatic switch to Low-Speed on Full-Speed PRE
+        ulpi_fs_pre = Signal()
         
         # ULPI physical layer
         self.submodules.ulpi_pl = ULPI_pl(
@@ -77,12 +80,12 @@ class OV3(Module):
         
         # ULPI controller
         ulpi_reg = Record(ULPI_REG)
-        self.submodules.ulpi = ULPI_ctrl(self.ulpi_pl.ulpi_bus, ulpi_reg)
+        self.submodules.ulpi = ULPI_ctrl(self.ulpi_pl.ulpi_bus, ulpi_reg, ulpi_fs_pre)
 
         # ULPI register R/W CSR interface
         self.submodules.ucfg = ULPICfg(
             self.cd_ulpi.clk, ulpi_cd_rst, self.ulpi_pl.ulpi_bus.rst,
-            ulpi_stp_ovr, ulpi_reg)
+            ulpi_stp_ovr, ulpi_reg, ulpi_fs_pre)
 
 
         # Receive Path

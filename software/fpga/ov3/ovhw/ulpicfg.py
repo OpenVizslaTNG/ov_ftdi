@@ -26,7 +26,7 @@ class _ULPI_cmd_reg(Module, CSR):
         self.comb += self.w.eq(Cat(self.addr, self.ack, self.trig))
 
 class ULPICfg(Module, AutoCSR):
-    def __init__(self, clk, cd_rst, ulpi_rst, ulpi_stp_ovr, ulpi_reg):
+    def __init__(self, clk, cd_rst, ulpi_rst, ulpi_stp_ovr, ulpi_reg, fs_pre):
 
         # TESTING - UCFG_RST register
         #  - BRST: reseting of code in the ULPI cd
@@ -122,3 +122,17 @@ class ULPICfg(Module, AutoCSR):
         self.submodules += self._rcmd
         self.sync += If(ulpi_reg.rack,
                 self._rdata.status.eq(ulpi_reg.rdata))
+
+        # UCFG_CAPTURE register
+        #
+        # FSPRE: automatically switch transceiver to Low-Speed after PRE
+        #
+        # Format:
+        #
+        #    7    6    5    4    3    2    1    0
+        #    ----------------------------------------
+        #    0    0    0    0    0    0    0    FSPRE
+
+        self._capture = CSRStorage(8)
+        self.submodules += self._capture
+        self.comb += fs_pre.eq(self._capture.storage[0])

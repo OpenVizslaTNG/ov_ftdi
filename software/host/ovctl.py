@@ -260,7 +260,7 @@ def sdramtest(dev):
 sniff_speeds = ["hs", "fs", "ls"]
 sniff_formats = ["verbose", "custom", "pcap", "iti1480a"]
 
-def do_sniff(dev, speed, format, out, timeout, debug_filter, filter_nak, filter_sof):
+def do_sniff(dev, speed, format, out, timeout, debug_filter, filter_nak, filter_sof, fs_pre):
     # LEDs off
     dev.regs.LEDS_MUX_2.wr(0)
     dev.regs.LEDS_OUT.wr(0)
@@ -291,11 +291,22 @@ def do_sniff(dev, speed, format, out, timeout, debug_filter, filter_nak, filter_
     if check_ulpi_clk(dev):
         return
 
+    assert (not fs_pre) or (speed == "fs")
+
+    try:
+        # Make sure FS PRE handling is disabled before setting speed
+        dev.regs.UCFG_CAPTURE.wr(0)
+    except KeyError:
+        if fs_pre:
+            assert 0, "Bitstream does not support FS PRE handling"
+
     # set to non-drive; set FS or HS as requested
     if speed == "hs":
             dev.ulpiregs.func_ctl.wr(0x48)
     elif speed == "fs":
             dev.ulpiregs.func_ctl.wr(0x49)
+            if fs_pre:
+                dev.regs.UCFG_CAPTURE.wr(1)
     elif speed == "ls":
             dev.ulpiregs.func_ctl.wr(0x4a)
     else:
@@ -413,11 +424,14 @@ class Sniff(Command):
                         help='Filter SOF packets in gateware')
         sp.add_argument('--debug-filter', action='store_true',
                         help='Report filtered packets instead of discarding')
+        sp.add_argument('--handle-fs-pre', action='store_true',
+                        help="Capture Low Speed packets after Full Speed preamble")
 
     @staticmethod
     def go(dev, args):
         do_sniff(dev, args.speed, args.format, args.out, args.timeout,
-                 args.debug_filter, args.filter_nak, args.filter_sof)
+                 args.debug_filter, args.filter_nak, args.filter_sof,
+                 args.handle_fs_pre)
 
 
 @command('debug-stream', 'Debug Stream')
