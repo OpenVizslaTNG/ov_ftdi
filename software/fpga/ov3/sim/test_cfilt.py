@@ -57,7 +57,7 @@ def process_ulpi(byte_list):
 
         expected.append({"ts": i, "d": d, "is_start": int(is_start),
             "is_end": int(is_end), "is_ovf": int(is_ovf),
-            "is_err": int(is_err)})
+            "is_err": int(is_err), "speed": int(0)})
 
     return expected
 

@@ -34,6 +34,12 @@ class ULPICfg(Module, AutoCSR):
         #  - FSTP: Force assert of STP during reset
         #   (should be part of ULPI cd bringup code)
         #
+        # Note: resetting ULPI clock domain without resetting PHY may result
+        # in cached transceiver reset value mismatch. The mismatch will be
+        # seen by incorrectly reported captured packets speed. It is expected
+        # that user understands this limitation and takes appropriate action
+        # (e.g. reconfigure transceiver speed after reset).
+        #
         # Format:
         #   
         #    7    6    5    4    3    2    1    0

@@ -294,13 +294,10 @@ def do_sniff(dev, speed, format, out, timeout, debug_filter, filter_nak, filter_
     # set to non-drive; set FS or HS as requested
     if speed == "hs":
             dev.ulpiregs.func_ctl.wr(0x48)
-            dev.rxcsniff.service.highspeed = True
     elif speed == "fs":
             dev.ulpiregs.func_ctl.wr(0x49)
-            dev.rxcsniff.service.highspeed = False
     elif speed == "ls":
             dev.ulpiregs.func_ctl.wr(0x4a)
-            dev.rxcsniff.service.highspeed = False
     else:
         assert 0,"Invalid Speed"
 

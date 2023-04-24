@@ -30,6 +30,7 @@ class FilterSOF(Module):
             self.output.payload.flag_last.eq(self.input.payload.flag_last),
             self.output.payload.flag_ovf.eq(self.input.payload.flag_ovf),
             self.output.payload.flag_err.eq(self.input.payload.flag_err),
+            self.output.payload.speed.eq(self.input.payload.speed),
             self.output.payload.start.eq(self.input.payload.start),
             self.output.payload.count.eq(self.input.payload.count),
             # Actual filter - set discard if packet is SOF and filter enabled

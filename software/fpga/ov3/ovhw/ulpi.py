@@ -69,6 +69,11 @@ class ULPI_ctrl(Module):
 		ulpi_data_tristate_next = Signal()
 		ulpi_stp_next = Signal()
 
+		reg_write_addr = Signal(8)
+		reg_write_data = Signal(8)
+
+		xcvr_select = Signal(2, reset=1)
+
 		ulpi_state_rx = Signal()
 		ulpi_state_rrd = Signal()
 		
@@ -95,8 +100,6 @@ class ULPI_ctrl(Module):
 			).Elif(RegReadAckSet, ulpi_reg.rack.eq(1))
 		self.sync.ulpi += If(~RegWriteReqR, ulpi_reg.wack.eq(0)
 			).Elif(RegWriteAckSet, ulpi_reg.wack.eq(1))
-			
-		exp = If(~RegWriteReqR, ulpi_reg.wack.eq(0)).Elif(RegWriteAckSet, ulpi_reg.wack.eq(1))
 
 		# output data if required by state
 		self.comb += ulpi_bus.stp.eq(ulpi_stp_next)
@@ -118,6 +121,7 @@ class ULPI_ctrl(Module):
 		ulpi_rx_stuff_d = Signal(8)
 
 		self.sync.ulpi += self.data_out_source.stb.eq(1)
+		self.sync.ulpi += self.data_out_source.payload.speed.eq(xcvr_select)
 		self.sync.ulpi += If(ulpi_rx_stuff,
 						self.data_out_source.payload.d.eq(ulpi_rx_stuff_d),
 						self.data_out_source.payload.rxcmd.eq(1)
@@ -157,6 +161,8 @@ class ULPI_ctrl(Module):
 			).Elif(RegWriteReq,
 				NextState("RW0"),
 				ulpi_data_next.eq(0x80 | ulpi_reg.waddr), # REGW
+				NextValue(reg_write_addr, 0x80 | ulpi_reg.waddr),
+				NextValue(reg_write_data, ulpi_reg.wdata),
 				ulpi_data_tristate_next.eq(0),
 				ulpi_stp_next.eq(0)
 			).Elif(RegReadReq,
@@ -186,7 +192,7 @@ class ULPI_ctrl(Module):
 				NextState("RX"),
 				ulpi_data_tristate_next.eq(1),
 			).Elif(~ulpi_bus.dir,
-				ulpi_data_next.eq(0x80 | ulpi_reg.waddr), # REGW
+				ulpi_data_next.eq(reg_write_addr), # REGW
 				ulpi_data_tristate_next.eq(0),
 				ulpi_stp_next.eq(0),
 				If(ulpi_bus.nxt, NextState("RWD")).Else(NextState("RW0")),
@@ -200,7 +206,7 @@ class ULPI_ctrl(Module):
 				ulpi_data_tristate_next.eq(1)
 			).Elif(~ulpi_bus.dir & ulpi_bus.nxt,
 				NextState("RWS"),
-				ulpi_data_next.eq(ulpi_reg.wdata),
+				ulpi_data_next.eq(reg_write_data),
 				ulpi_data_tristate_next.eq(0),
 				ulpi_stp_next.eq(0)
 			).Else(
@@ -214,6 +220,14 @@ class ULPI_ctrl(Module):
 				ulpi_data_next.eq(0x00), # NOOP
 				ulpi_data_tristate_next.eq(0),
 				ulpi_stp_next.eq(1),
+				# Update transceiver speed on function control register change
+				If(reg_write_addr == 0x84,
+					NextValue(xcvr_select, reg_write_data[0:2])
+				).Elif(reg_write_addr == 0x85,
+					NextValue(xcvr_select, xcvr_select | reg_write_data[0:2])
+				).Elif(reg_write_addr == 0x86,
+					NextValue(xcvr_select, xcvr_select & ~reg_write_data[0:2])
+				),
 				RegWriteAckSet.eq(1)
 			).Elif(ulpi_bus.dir,
 				NextState("RX"),

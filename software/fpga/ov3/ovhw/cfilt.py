@@ -40,6 +40,7 @@ class RXCmdFilter(Module):
                     (self.sink.payload.d[4:6] == 0x3)),
 
                 self.source.payload.d.eq(self.sink.payload.d),
+                self.source.payload.speed.eq(self.sink.payload.speed),
                 self.source.payload.ts.eq(ts_counter)
                 ]
 

@@ -53,7 +53,8 @@ class Consumer(Module):
                 Mux(self.sink.payload.flag_last, HF0_LAST, 0) |
                 Mux(self.sink.payload.flag_ovf, HF0_OVF, 0) |
                 Mux(self.sink.payload.flag_err, HF0_ERR, 0) |
-                Mux(pkt_truncated, HF0_TRUNC, 0)
+                Mux(pkt_truncated, HF0_TRUNC, 0) |
+                (self.sink.payload.speed << HF0_SPEED_SHIFT)
             ),
         ]
 
