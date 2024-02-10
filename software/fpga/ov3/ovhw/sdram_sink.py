@@ -141,7 +141,7 @@ class SDRAM_Sink(Module, AutoCSR):
         # update wptr
         self.sync += If(go &~ gor,
                 self.wptr.eq(self._ring_base.storage),
-            ).Elif((hostif.d_stb &~ hostif.d_term) | wrap,
+            ).Elif((hostif.d_stb &~ hostif.d_term) | (wrap & ~blocked),
                 self.wptr.eq(wptr_next)
             )
 
