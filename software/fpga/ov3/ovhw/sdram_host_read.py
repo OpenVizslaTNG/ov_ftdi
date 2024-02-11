@@ -96,6 +96,7 @@ class SDRAM_Host_Read(Module, AutoCSR):
 
         self.sdram_read_fsm.act("BLOCKED",
             self.s2_acc.inc(),
+            hostif.d_term.eq(1),
             If(go & ~blocked, NextState("IDLE"))
         )
 
@@ -142,7 +143,7 @@ class SDRAM_Host_Read(Module, AutoCSR):
         self.sync += \
             If(go &~ gor, 
                 rptr.eq(self._ring_base.storage),
-            ).Elif(hostif.d_stb &~hostif.d_term | wrap, 
+            ).Elif((hostif.d_stb &~hostif.d_term) | (wrap & ~blocked),
                 rptr.eq(rptr_next))
 
         self.comb += sdram_fifo.we.eq(hostif.d_stb &~ hostif.d_term)
