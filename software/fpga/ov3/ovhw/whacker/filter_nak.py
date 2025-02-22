@@ -48,6 +48,7 @@ class FilterNAK(Module):
             self.output.payload.flag_last.eq(self.queue.source.payload.flag_last),
             self.output.payload.flag_ovf.eq(self.queue.source.payload.flag_ovf),
             self.output.payload.flag_err.eq(self.queue.source.payload.flag_err),
+            self.output.payload.speed.eq(self.queue.source.payload.speed),
             self.output.payload.start.eq(self.queue.source.payload.start),
             self.output.payload.count.eq(self.queue.source.payload.count),
         ]

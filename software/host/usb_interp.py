@@ -6,10 +6,9 @@ class USBInterpreter(object):
     import crcmod
     data_crc = staticmethod(crcmod.mkCrcFun(0x18005))
 
-    def __init__(self, highspeed):
+    def __init__(self):
         self.frameno = None
         self.subframe = 0
-        self.highspeed = True
 
         self.last_ts_frame = 0
 
@@ -32,6 +31,8 @@ class USBInterpreter(object):
 
         ts += self.ts_base
 
+        highspeed = (flags & 0xC0) == (0 << 6)
+        fullspeed = (flags & 0xC0) == (1 << 6)
 
         suppress = False
 
@@ -52,7 +53,7 @@ class USBInterpreter(object):
                     else:
                         if self.subframe == None:
                             if frameno == (self.frameno + 1) & 0xFF:
-                                self.subframe = 0 if self.highspeed else None
+                                self.subframe = 0 if highspeed else None
                         else:
                             self.subframe += 1
                             if self.subframe == 8:
@@ -112,7 +113,7 @@ class USBInterpreter(object):
             elif pid == 0x6:
                 msg += "NYET"
             elif pid == 0xC:
-                msg += "PRE-ERR"
+                msg += "ERR" if highspeed else "PRE" if fullspeed else "Err - PRE/ERR on Low-Speed"
                 pass
             elif pid == 0x8:
                 msg += "SPLIT"
@@ -127,7 +128,8 @@ class USBInterpreter(object):
                 CRC_NONE: ' '
             }
 
-            flag_field = "[  %s%s%s%s%s%s]" % (
+            flag_field = "[%s%s%s%s%s%s%s]" % (
+                'HS' if highspeed else 'FS' if fullspeed else 'LS',
                 'L' if flags & 0x20 else ' ',
                 'F' if flags & 0x10 else ' ',
                 'T' if flags & 0x08 else ' ',

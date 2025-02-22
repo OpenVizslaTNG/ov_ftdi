@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -75,7 +76,6 @@ enum {
 
 int frameno;
 int subframe;
-unsigned char highspeed = 1;
 unsigned char suppress = 0;
 long long ts_delta_pkt;
 unsigned long long last_ts_pkt, ts_base = 0;
@@ -87,10 +87,11 @@ unsigned long long last_ts_print;
 
 void ChandlePacket(unsigned long long ts, unsigned int flags, unsigned char *buf, unsigned int len) {
   unsigned char msg[2048] = "";
-  unsigned char flag_field[] = "[        ]";
+  unsigned char flag_field[] = "[ S      ]";
   unsigned char header[128], frame_print[16]="", subf_print[16]="";
   unsigned int delta_subframe, delta_print;
   float RATE = 60.0e6;
+  bool highspeed, fullspeed;
 
   unsigned char pid;
   //  printf("ChandlePacket(%u, %u, %p, %u)\n", ts, flags, buf, len);
@@ -102,7 +103,21 @@ void ChandlePacket(unsigned long long ts, unsigned int flags, unsigned char *buf
     ts_base += ts_roll_cyc;
   }
   ts += ts_base;
-
+  highspeed = fullspeed = false;
+  switch (flags & 0xC0) {
+    case 0 << 6:
+      flag_field[1] = 'H';
+      highspeed = true;
+      break;
+    case 1 << 6:
+      flag_field[1] = 'F';
+      fullspeed = true;
+      break;
+    case 2 << 6: /* Low-Speed */
+    case 3 << 6: /* Low-Speed after PRE */
+      flag_field[1] = 'L';
+      break;
+  }
   if (flags & 0x20) flag_field[3] = 'L';
   if (flags & 0x10) flag_field[4] = 'F';
   if (flags & 0x08) flag_field[5] = 'T';
@@ -209,7 +224,14 @@ void ChandlePacket(unsigned long long ts, unsigned int flags, unsigned char *buf
     strcpy(msg, "NYET");
     break;
   case 0xC: // PRE-ERR
-    strcpy(msg, "PRE-ERR");
+    if (highspeed) {
+      strcpy(msg, "ERR");
+    } else if (fullspeed) {
+      strcpy(msg, "PRE");
+    } else {
+      strcpy(msg, "Err - PRE/ERR on Low-Speed");
+      goto done;
+    }
     break;
   case 0x8: // SPLIT
     strcpy(msg, "SPLIT");

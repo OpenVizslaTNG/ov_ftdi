@@ -52,3 +52,6 @@ HF0_FIRST = 0x10
 # Last packet of capture session; IE, when the cap hardware was disabled
 HF0_LAST = 0x20
 
+# Transceiver speed
+HF0_SPEED_MASK = 0xC0
+HF0_SPEED_SHIFT = 6
