@@ -29,6 +29,7 @@ class Producer(Module):
         self.submodules.flag_last = Acc(1)
         self.submodules.flag_ovf = Acc(1)
         self.submodules.flag_err = Acc(1)
+        self.submodules.speed = Acc(2)
 
         self.submodules.to_start = Acc(1)
 
@@ -100,6 +101,7 @@ class Producer(Module):
                     self.flag_last.set(self.packet_last.v),
                     self.flag_ovf.set(0),
                     self.flag_err.set(0),
+                    self.speed.set(self.ulpi_sink.payload.speed),
                     self.to_start.set(0),
 
                     la_resets,
@@ -193,6 +195,7 @@ class Producer(Module):
             self.out_addr.payload.flag_last.eq(self.flag_last.v),
             self.out_addr.payload.flag_ovf.eq(self.flag_ovf.v),
             self.out_addr.payload.flag_err.eq(self.flag_err.v),
+            self.out_addr.payload.speed.eq(self.speed.v),
             self.out_addr.payload.start.eq(self.produce_header.v),
             self.out_addr.payload.count.eq(self.size.v),
             If(self.out_addr.ack,

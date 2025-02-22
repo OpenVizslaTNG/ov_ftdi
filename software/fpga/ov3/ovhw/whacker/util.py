@@ -14,6 +14,7 @@ def dmatpl(depth):
             ('flag_last', 1),
             ('flag_ovf', 1),
             ('flag_err', 1),
+            ('speed', 2),
             # Start address of actual USB packet start in ring buffer
             ('start', b),
             # Packet size, but only up to MAX_PACKET_SIZE bytes are captured
