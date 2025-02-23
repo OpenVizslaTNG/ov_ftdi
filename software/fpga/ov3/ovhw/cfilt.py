@@ -1,8 +1,6 @@
 from migen import *
 from migen.genlib.fsm import FSM, NextState
-from migen.genlib.record import Record, DIR_M_TO_S
 from misoc.interconnect.stream import Endpoint
-from misoc.interconnect.csr import AutoCSR, CSRStorage, CSRStatus
 
 from ovhw.constants import *
 from ovhw.ov_types import ULPI_DATA_D, ULPI_DATA_TAG
@@ -42,6 +40,7 @@ class RXCmdFilter(Module):
                     (self.sink.payload.d[4:6] == 0x3)),
 
                 self.source.payload.d.eq(self.sink.payload.d),
+                self.source.payload.speed.eq(self.sink.payload.speed),
                 self.source.payload.ts.eq(ts_counter)
                 ]
 
@@ -98,40 +97,3 @@ class RXCmdFilter(Module):
             ).Else(
                 skip("PACKET")
             ))
-
-class TestFilt(Module):
-    def __init__(self, clock):
-
-        self.submodules.tr = RXCmdFilter()
-        
-        self.comb += self.tr.source.ack.eq(self.tr.source.stb)
-
-        self.byte_list = [(1,0x40), (0,0xCA), (1,0x10), (0, 0xFE), (1, 0x41)]
-
-    def do_simulation(self, s):
-        if s.cycle_counter > 5 and s.cycle_counter %2 and self.byte_list:
-            b = self.byte_list[0]
-            print("WR %s" % repr(b))
-            self.byte_list = self.byte_list[1:]
-
-            s.wr(self.tr.sink.stb, 1) 
-            s.wr(self.tr.sink.payload.d, b[1])
-            s.wr(self.tr.sink.payload.rxcmd, b[0])
-        else:
-            s.wr(self.tr.sink.stb,0)
-    
-
-        if s.rd(self.tr.source.stb):
-            print("%02x %d" % (s.rd(self.tr.source.payload.d), s.rd(self.tr.source.payload.rxcmd)))
-
-
-        
-if __name__ == "__main__":
-    from migen.sim.generic import Simulator, TopLevel
-
-    tl = TopLevel("sdram.vcd")
-
-    test = TestFilt(tl.clock_domains[0])
-    sim = Simulator(test, tl)
-    sim.run(500)
-

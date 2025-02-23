@@ -426,6 +426,22 @@ HF0_TRUNC = 0x08
 HF0_FIRST = 0x10
 # Last packet of capture session; IE, when the cap hardware was disabled
 HF0_LAST = 0x20
+# Transceiver speed
+HF0_SPEED_MASK = 0xC0
+HF0_SPEED_SHIFT = 6
+HF0_SPEED_HIGH = (0 << HF0_SPEED_SHIFT)
+HF0_SPEED_FULL = (1 << HF0_SPEED_SHIFT)
+HF0_SPEED_LOW = (2 << HF0_SPEED_SHIFT)
+HF0_SPEED_LOW_AFTER_PRE = (3 << HF0_SPEED_SHIFT)
+
+def decode_speed(flags):
+    speed = {
+        HF0_SPEED_HIGH: "High-Speed",
+        HF0_SPEED_FULL: "Full-Speed",
+        HF0_SPEED_LOW: "Low-Speed",
+        HF0_SPEED_LOW_AFTER_PRE: "Low-Speed after PRE"
+    }[flags & HF0_SPEED_MASK]
+    return speed
 
 def decode_flags(flags):
     ret = ""
@@ -448,13 +464,11 @@ class RXCSniff:
             return 1
 
         def __init__(self):
-            self.last_rxcmd = 0
+            self.last_speed = None
 
             self.usbbuf = []
 
-            self.highspeed = False
-
-            self.ui = USBInterpreter(self.highspeed)
+            self.ui = USBInterpreter()
 
             self.handlers = [self.handle_usb_verbose]
 
@@ -493,7 +507,7 @@ class RXCSniff:
                 offset += delta_ts_len
                 self.cumulative_ts += ts
 
-                if flags != 0 and flags != HF0_FIRST and flags != HF0_LAST:
+                if flags & ~(HF0_FIRST | HF0_LAST | HF0_SPEED_MASK):
                     print("PERR: %04X (%s)" % (flags, decode_flags(flags)))
 
                 if flags & HF0_FIRST:
@@ -515,6 +529,9 @@ class RXCSniff:
                 handler(ts, buf, flags, orig_len)
 
         def handle_usb_verbose(self, ts, buf, flags, orig_len):
+                if (flags & HF0_SPEED_MASK) != self.last_speed:
+                    self.last_speed = flags & HF0_SPEED_MASK
+                    print(decode_speed(self.last_speed))
 #                ChandlePacket(ts, flags, buf, len(buf))
                 self.ui.handlePacket(ts, buf, flags, orig_len)
 
