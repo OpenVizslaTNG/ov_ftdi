@@ -76,17 +76,6 @@ typedef struct {
   libusb_device_handle *handle;
 } FTDIDevice;
 
-typedef struct {
-   struct {
-      uint64_t       totalBytes;
-      struct timeval time;
-   } first, prev, current;
-
-   double totalTime;
-   double totalRate;
-   double currentRate;
-} FTDIProgressInfo;
-
 
 /*
  * USB Constants
@@ -110,8 +99,7 @@ typedef struct {
 #define FTDI_LOG_PACKET_SIZE      9     // 512 == 1 << 9
 #define FTDI_HEADER_SIZE          2
 
-typedef int (FTDIStreamCallback)(uint8_t *buffer, int length,
-                                 FTDIProgressInfo *progress, void *userdata);
+typedef int (FTDIStreamCallback)(uint8_t *buffer, int length, void *userdata);
 
 
 /*

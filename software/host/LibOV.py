@@ -51,7 +51,6 @@ p_cb_StreamCallback = ctypes.CFUNCTYPE(
         ctypes.c_int,    # retval
         ctypes.POINTER(ctypes.c_uint8), # buf
         ctypes.c_int, # length
-        ctypes.c_void_p, # progress
         ctypes.c_void_p) # userdata
 
 FTDIDevice_ReadStream = libov.FTDIDevice_ReadStream
@@ -133,7 +132,7 @@ class FTDIDevice:
     def read(self, intf, n):
         buf = []
 
-        def callback(b, prog):
+        def callback(b):
             buf.extend(b)
             return int(len(buf) >= n)
 
@@ -142,12 +141,12 @@ class FTDIDevice:
         return buf
 
     def read_async(self, intf, callback, packetsPerTransfer, numTransfers):
-        def callback_wrapper(buf, ll, prog, user):
+        def callback_wrapper(buf, ll, user):
             if ll:
                 b = ctypes.string_at(buf, ll)
             else:
                 b = b''
-            return callback(b, prog)
+            return callback(b)
 
         cb = p_cb_StreamCallback(callback_wrapper)
 
@@ -641,7 +640,7 @@ class OVDevice:
     def __comms(self):
         self.__buf = b""
 
-        def callback(b, prog):
+        def callback(b):
             try:
                 if self.verbose and b:
                     print("> %s" % " ".join("%02x" % i for i in b))
