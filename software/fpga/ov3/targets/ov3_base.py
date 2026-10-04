@@ -108,6 +108,19 @@ class OV3BaseSoC(Module):
         self.submodules.crg = _CRG(plat)
         self.clock_domains.cd_sys = self.crg.cd_sys
 
+        # Request init_b to prevent unused pin pull-down from forming voltage
+        # divider with the external pull-up
+        self.add_dummy_input(plat.request("init_b"))
+
+    def add_dummy_input(self, pin):
+        # Connect input pin to permanently disabled (CE=0) ILOGIC FF
+        dummy_input_q = Signal()
+        dummy_input_q.attr.add(("S", "TRUE"))
+
+        self.specials += Instance("FDE",
+            i_D=pin, i_C=ClockSignal(), i_CE=dummy_input_q, o_Q=dummy_input_q,
+            attr={("IOB", "TRUE")})
+
     def _connect_ulpi(self, ulpi_pins, ulpi_pl):
         # Combinational signals: rst, nxt, dir
         self.comb += [
