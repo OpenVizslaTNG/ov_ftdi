@@ -264,13 +264,12 @@ void ChandlePacket(unsigned long long ts, unsigned int flags, unsigned char *buf
 
 unsigned char got_start = 0;
 
-int CStreamCallback (uint8_t *buffer, int length,
-			FTDIProgressInfo *progress, void *userdata) {
+int CStreamCallback (uint8_t *buffer, int length, void *userdata) {
   unsigned char *p;
   FTDIStreamCallback *cb;
   if (!buffer ||  !length) 
     return 0;
-  //    printf("CStreamCallback(%p, %d, %p, %p)\n", buffer, length, progress, userdata);
+  //    printf("CStreamCallback(%p, %d, %p)\n", buffer, length, userdata);
   //  hexdump(buffer, length);
   cb = (FTDIStreamCallback *)userdata;
 
@@ -293,7 +292,7 @@ int CStreamCallback (uint8_t *buffer, int length,
 	p++;
 	break;
       }
-      cb(p, 5, progress, NULL);
+      cb(p, 5, NULL);
       packet_buf_len -= 5;
       p+=5;
       break;
@@ -304,7 +303,7 @@ int CStreamCallback (uint8_t *buffer, int length,
 	p++;
 	break;
       }
-      cb(p, p[1]+2, progress, NULL);
+      cb(p, p[1]+2, NULL);
       break;
     case 0xA0:
     case 0xA2:

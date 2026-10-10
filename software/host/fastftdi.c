@@ -40,7 +40,6 @@ typedef struct {
    FTDIStreamCallback *callback;
    void *userdata;
    int result;
-   FTDIProgressInfo progress;
 } FTDIStreamState;
 
 static int
@@ -314,10 +313,9 @@ ReadStreamCallback(struct libusb_transfer *transfer)
                packetLen = FTDI_PACKET_SIZE;
 
             payloadLen = packetLen - FTDI_HEADER_SIZE;
-            state->progress.current.totalBytes += payloadLen;
 
             state->result = state->callback(ptr + FTDI_HEADER_SIZE, payloadLen,
-                                            NULL, state->userdata);
+                                            state->userdata);
             if (state->result)
                break;
 
@@ -334,13 +332,6 @@ ReadStreamCallback(struct libusb_transfer *transfer)
       transfer->status = -1;
       state->result = libusb_submit_transfer(transfer);
    }
-}
-
-
-static double
-TimevalDiff(const struct timeval *a, const struct timeval *b)
-{
-   return (a->tv_sec - b->tv_sec) + 1e-6 * (a->tv_usec - b->tv_usec);
 }
 
 
@@ -402,45 +393,13 @@ FTDIDevice_ReadStream(FTDIDevice *dev, FTDIInterface interface,
    }
 
    /*
-    * Run the transfers, and periodically assess progress.
+    * Run the transfers until callback stops the stream or error occurs.
     */
 
-   gettimeofday(&state.progress.first.time, NULL);
-
    do {
-      FTDIProgressInfo  *progress = &state.progress;
-      const double progressInterval = 0.1;
-      struct timeval timeout = { 0, 10000 };
-      struct timeval now;
-
-      int err = libusb_handle_events_timeout(dev->libusb, &timeout);
+      int err = libusb_handle_events(dev->libusb);
       if (!state.result) {
          state.result = err;
-      }
-
-      // If enough time has elapsed, update the progress
-      gettimeofday(&now, NULL);
-      if (TimevalDiff(&now, &progress->current.time) >= progressInterval) {
-
-         progress->current.time = now;
-
-         if (progress->prev.totalBytes) {
-            // We have enough information to calculate rates
-
-            double currentTime;
-
-            progress->totalTime = TimevalDiff(&progress->current.time,
-                                              &progress->first.time);
-            currentTime = TimevalDiff(&progress->current.time,
-                                      &progress->prev.time);
-
-            progress->totalRate = progress->current.totalBytes / progress->totalTime;
-            progress->currentRate = (progress->current.totalBytes -
-                                     progress->prev.totalBytes) / currentTime;
-         }
-
-         state.result = state.callback(NULL, 0, progress, state.userdata);
-         progress->prev = progress->current;
       }
    } while (!state.result);
 

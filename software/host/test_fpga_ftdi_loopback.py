@@ -27,7 +27,7 @@ def read_with_timeout(dev, n, idle_timeout=2.0):
     buf = bytearray()
     last = [time.time()]
 
-    def cb(b, prog):
+    def cb(b):
         if b:
             buf.extend(b)
             last[0] = time.time()
@@ -211,7 +211,7 @@ def loopback(dev, seed, total_bytes, max_chunk, randomize_write_size, sleep_prob
         print(f"Interrupted, waiting for remaining {in_flight / MIB:.1f} MiB "
               f"still in flight (Ctrl-C again to abort)")
 
-    def cb(b, prog):
+    def cb(b):
         # Variables used only by this thread
         nonlocal last_data_time, next_status, mismatch_tail
         # Variables that can only be access with progress lock held

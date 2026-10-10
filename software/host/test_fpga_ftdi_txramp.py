@@ -20,7 +20,7 @@ def read_with_timeout(dev, n, idle_timeout=2.0):
     buf = bytearray()
     last = [time.time()]
 
-    def cb(b, prog):
+    def cb(b):
         if b:
             buf.extend(b)
             last[0] = time.time()
